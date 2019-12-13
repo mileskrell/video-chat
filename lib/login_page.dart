@@ -24,15 +24,21 @@ class _LoginPageState extends State<LoginPage> {
             IntrinsicWidth(
               child: TextField(
                 decoration: InputDecoration(hintText: "Display name"),
-                onChanged: (input) => displayNameInput = input,
+                onChanged: (input) {
+                  setState(() => displayNameInput = input);
+                },
               ),
             ),
-            FlatButton(
+            RaisedButton(
               child: Text("Login"),
-              onPressed: () =>
-                  Navigator.push(context, MaterialPageRoute(builder: (context) {
-                return VideoPage(displayName: displayNameInput);
-              })),
+              onPressed: displayNameInput.isEmpty
+                  ? null
+                  : () => Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) {
+                          return VideoPage(displayName: displayNameInput);
+                        }),
+                      ),
             ),
           ],
         ),
