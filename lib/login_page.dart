@@ -21,12 +21,15 @@ class _LoginPageState extends State<LoginPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            IntrinsicWidth(
-              child: TextField(
-                decoration: InputDecoration(hintText: "Display name"),
-                onChanged: (input) {
-                  setState(() => displayNameInput = input);
-                },
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: IntrinsicWidth(
+                child: TextField(
+                  decoration: InputDecoration(hintText: "Display name"),
+                  onChanged: (input) {
+                    setState(() => displayNameInput = input);
+                  },
+                ),
               ),
             ),
             RaisedButton(
