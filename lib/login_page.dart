@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:video_chat/video_page.dart';
+import 'package:video_chat/connect_page.dart';
 
 class LoginPage extends StatefulWidget {
   LoginPage({Key key}) : super(key: key);
@@ -39,7 +39,7 @@ class _LoginPageState extends State<LoginPage> {
                   : () => Navigator.push(
                         context,
                         MaterialPageRoute(builder: (context) {
-                          return VideoPage(displayName: displayNameInput);
+                          return ConnectPage(displayName: displayNameInput);
                         }),
                       ),
             ),
