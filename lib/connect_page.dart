@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:connectivity/connectivity.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_webrtc/webrtc.dart';
 import 'package:get_ip/get_ip.dart';
+import 'package:video_chat/video_page.dart';
 
 class ConnectPage extends StatefulWidget {
   final String displayName;
@@ -16,7 +20,18 @@ class ConnectPage extends StatefulWidget {
 class _ConnectPageState extends State<ConnectPage> {
   String ownIPAddress = "z"; // dummy value because it can't be "" or null
   String otherIPAddress = "";
+  String remoteDisplayName;
   StreamSubscription<ConnectivityResult> subscription;
+
+  RTCPeerConnection rtcPeerConnection;
+  MediaStream localStream;
+
+  bool hasSentOffer = false;
+
+  RTCSessionDescription localOffer;
+  RTCSessionDescription remoteOffer;
+  RTCSessionDescription localAnswer;
+  RTCSessionDescription remoteAnswer;
 
   void updateOwnIP() async {
     // This seems to return an empty string when not connected, but the docs say
@@ -25,10 +40,52 @@ class _ConnectPageState extends State<ConnectPage> {
     setState(() => ownIPAddress = ip);
   }
 
+  void startReceiving() async {
+    final ss = await ServerSocket.bind(InternetAddress.anyIPv4, PORT);
+    ss.listen((socket) {
+      if (otherIPAddress == "") {
+        setState(() => otherIPAddress = socket.remoteAddress.address);
+      }
+      socket.listen((data) async {
+        final receivedNameSdpMap =
+            jsonDecode(String.fromCharCodes(data));
+        remoteDisplayName = receivedNameSdpMap["name"];
+        final sdp = receivedNameSdpMap["sdp"];
+
+        if (!hasSentOffer) {
+          // Then we must be receiving an offer
+          this.remoteOffer = RTCSessionDescription(sdp, "offer");
+          rtcPeerConnection.setRemoteDescription(remoteOffer);
+
+          // Send answer
+          this.localAnswer = await rtcPeerConnection.createAnswer({});
+          rtcPeerConnection.setLocalDescription(localAnswer);
+          Socket.connect(socket.remoteAddress, PORT).then((returnSocket) async {
+            final message = JsonEncoder().convert({
+              "name": widget.displayName,
+              "sdp": localAnswer.sdp,
+            });
+            returnSocket.write(message);
+            await returnSocket.flush();
+          });
+
+          pushVideoPage();
+        } else {
+          // Then we must be receiving an answer to our offer
+          this.remoteAnswer = RTCSessionDescription(sdp, "answer");
+          rtcPeerConnection.setRemoteDescription(remoteAnswer);
+
+          pushVideoPage();
+        }
+      });
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     updateOwnIP();
+    startReceiving();
     subscription = Connectivity().onConnectivityChanged.listen((result) {
       // This setState() call is necessary because updateOwnIP() seems to
       // occasionally return old data, e.g. when called immediately after
@@ -36,6 +93,20 @@ class _ConnectPageState extends State<ConnectPage> {
       setState(() => ownIPAddress = null);
       updateOwnIP();
     });
+    () async {
+      rtcPeerConnection = await createPeerConnection({
+        "iceServers": [
+          {"urls": "stun:stun.l.google.com:19302"}
+        ]
+      }, {});
+      localStream = await navigator.getUserMedia(
+        {
+          "video": {"mandatory": {}},
+          "audio": true
+        },
+      );
+      rtcPeerConnection.addStream(localStream);
+    }();
   }
 
   @override
@@ -85,7 +156,7 @@ class _ConnectPageState extends State<ConnectPage> {
                   Padding(
                     padding: EdgeInsets.all(16),
                     child: Text(
-                      "Enter local IP address of the device you wish to connect to.",
+                      "Enter local IP address of the device you wish to connect to, or wait for someone else to connect to you.",
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -102,8 +173,7 @@ class _ConnectPageState extends State<ConnectPage> {
                       child: Text("Connect"),
                       onPressed: otherIPAddress == ""
                           ? null
-                          : () => Scaffold.of(context).showSnackBar(SnackBar(
-                              content: Text("Hello, $otherIPAddress!"))),
+                          : () async => sendOfferAndAwaitAnswer(),
                     ),
                   ),
                 ],
@@ -111,4 +181,31 @@ class _ConnectPageState extends State<ConnectPage> {
       ),
     );
   }
+
+  Future<RTCSessionDescription> sendOfferAndAwaitAnswer() async {
+    hasSentOffer = true;
+
+    localOffer = await rtcPeerConnection.createOffer({});
+    rtcPeerConnection.setLocalDescription(localOffer);
+    final socket = await Socket.connect(otherIPAddress, PORT);
+    final message = JsonEncoder().convert({
+      "name": widget.displayName,
+      "sdp": localOffer.sdp,
+    });
+    socket.write(message);
+    await socket.flush();
+//    socket?.destroy(); // The other device can use this socket to send its answer
+  }
+
+  void pushVideoPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) =>
+            VideoPage(widget.displayName, remoteDisplayName, rtcPeerConnection),
+      ),
+    );
+  }
 }
+
+const PORT = 5657;

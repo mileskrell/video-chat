@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:video_chat/login_page.dart';
-import 'package:video_chat/socket_test_page.dart';
 
 void main() => runApp(MyApp());
 
@@ -12,7 +11,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: SocketChat(),
+      home: LoginPage(),
     );
   }
 }
